@@ -577,20 +577,19 @@
     const cont = document.getElementById('movs');
     if (!lista.length) {
       cont.innerHTML = '<div class="empty">No hay movimientos todavía.<br>Registra el primero arriba.</div>';
-      return;
-    }
-
-    cont.innerHTML = lista.map(m => `
-      <div class="mov">
-        <div class="dot ${m.tipo}">${m.tipo === 'in' ? '↓' : '↑'}</div>
-        <div class="mov-info">
-          <div class="desc">${escapar(m.desc)}</div>
-          <div class="meta">${fechaTexto(m.fecha)}</div>
+    } else {
+      cont.innerHTML = lista.map(m => `
+        <div class="mov">
+          <div class="dot ${m.tipo}">${m.tipo === 'in' ? '↓' : '↑'}</div>
+          <div class="mov-info">
+            <div class="desc">${escapar(m.desc)}</div>
+            <div class="meta">${fechaTexto(m.fecha)}</div>
+          </div>
+          <div class="mov-amount ${m.tipo}">${m.tipo === 'in' ? '+' : '−'}${fmt(m.monto)}</div>
+          <button class="del" onclick="eliminar(${m.id})" title="Eliminar">×</button>
         </div>
-        <div class="mov-amount ${m.tipo}">${m.tipo === 'in' ? '+' : '−'}${fmt(m.monto)}</div>
-        <button class="del" onclick="eliminar(${m.id})" title="Eliminar">×</button>
-      </div>
-    `).join('');
+      `).join('');
+    }
 
     // Reporte de impresión
     const filas = movimientos.map(m => `
