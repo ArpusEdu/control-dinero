@@ -37,6 +37,22 @@
   header h1 { font-size: 26px; font-weight: 650; letter-spacing: -0.02em; }
   header p { color: var(--muted); font-size: 14px; margin-top: 4px; }
 
+  .btn-print {
+    border: 1px solid var(--line);
+    background: #fff;
+    color: var(--ink);
+    padding: 8px 14px;
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+    white-space: nowrap;
+    flex-shrink: 0;
+    transition: background .15s;
+  }
+  .btn-print:hover { background: var(--bg); }
+
   .btn-clear-all {
     border: 1px solid #e8e8e3;
     background: #fff;
@@ -252,6 +268,35 @@
   }
   .toast.show { opacity: 1; }
 
+  .print-report { display: none; }
+
+  @media print {
+    body { background: #fff; padding: 0; font-size: 12px; }
+    .wrap > *:not(.print-report) { display: none !important; }
+    .print-report { display: block; }
+
+    .pr-header { border-bottom: 2px solid #1a1a18; padding-bottom: 10px; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: flex-end; }
+    .pr-header h1 { font-size: 18px; font-weight: 700; }
+    .pr-header .pr-date { font-size: 11px; color: #666; }
+
+    .pr-totals { display: flex; gap: 24px; margin-bottom: 16px; }
+    .pr-total { text-align: center; }
+    .pr-total .lbl { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: #666; }
+    .pr-total .val { font-size: 16px; font-weight: 700; margin-top: 2px; }
+    .pr-total.in .val  { color: #2e7d4f; }
+    .pr-total.out .val { color: #c0392b; }
+    .pr-total.bal .val { color: #1a1a18; }
+
+    .pr-table { width: 100%; border-collapse: collapse; }
+    .pr-table th { background: #1a1a18; color: #fff; text-align: left; padding: 7px 10px; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .pr-table td { padding: 7px 10px; border-bottom: 1px solid #e8e8e3; font-size: 12px; vertical-align: middle; }
+    .pr-table tr:nth-child(even) td { background: #f9f9f7; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .pr-table .amt-in  { color: #2e7d4f; font-weight: 600; text-align: right; }
+    .pr-table .amt-out { color: #c0392b; font-weight: 600; text-align: right; }
+    .pr-table td.date  { color: #666; white-space: nowrap; }
+    .pr-table tfoot td { font-weight: 700; border-top: 2px solid #1a1a18; border-bottom: none; }
+  }
+
   @media (max-width: 560px) {
     .summary { grid-template-columns: 1fr; }
     .row { grid-template-columns: 1fr; }
@@ -266,7 +311,10 @@
       <h1>Control de Dinero</h1>
       <p>Registra cada entrada y salida con su justificación.</p>
     </div>
-    <button class="btn-clear-all" onclick="borrarTodo()">Borrar todo</button>
+    <div style="display:flex;gap:8px;flex-shrink:0;margin-top:4px">
+      <button class="btn-print" onclick="window.print()">Imprimir</button>
+      <button class="btn-clear-all" onclick="borrarTodo()">Borrar todo</button>
+    </div>
   </header>
 
   <div class="summary">
@@ -318,6 +366,9 @@
   </div>
 
   <div class="movs" id="movs"></div>
+
+  <!-- Solo visible al imprimir -->
+  <div class="print-report" id="print-report"></div>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -449,6 +500,32 @@
         <button class="del" onclick="eliminar(${m.id})" title="Eliminar">×</button>
       </div>
     `).join('');
+
+    // Reporte de impresión
+    const filas = movimientos.map(m => `
+      <tr>
+        <td class="date">${fechaTexto(m.fecha)}</td>
+        <td>${escapar(m.desc)}</td>
+        <td class="${m.tipo === 'in' ? 'amt-in' : 'amt-out'}">${m.tipo === 'in' ? '+' : '−'}${fmt(m.monto)}</td>
+      </tr>
+    `).join('');
+
+    document.getElementById('print-report').innerHTML = `
+      <div class="pr-header">
+        <div><h1>Control de Dinero</h1></div>
+        <div class="pr-date">Generado el ${new Date().toLocaleDateString('es-CO', {day:'numeric',month:'long',year:'numeric'})}</div>
+      </div>
+      <div class="pr-totals">
+        <div class="pr-total in"><div class="lbl">Entradas</div><div class="val">${fmt(totalIn)}</div></div>
+        <div class="pr-total out"><div class="lbl">Salidas</div><div class="val">${fmt(totalOut)}</div></div>
+        <div class="pr-total bal"><div class="lbl">Saldo</div><div class="val">${fmt(totalIn - totalOut)}</div></div>
+      </div>
+      <table class="pr-table">
+        <thead><tr><th>Fecha</th><th>Descripción</th><th style="text-align:right">Monto</th></tr></thead>
+        <tbody>${filas}</tbody>
+        <tfoot><tr><td colspan="2">Total</td><td class="${(totalIn-totalOut)>=0?'amt-in':'amt-out'}" style="text-align:right">${fmt(totalIn-totalOut)}</td></tr></tfoot>
+      </table>
+    `;
   }
 </script>
 </body>
