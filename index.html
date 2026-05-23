@@ -252,19 +252,6 @@
   }
   .toast.show { opacity: 1; }
 
-  #setup-banner {
-    background: #fff8e1;
-    border: 1px solid #ffc107;
-    border-radius: 12px;
-    padding: 16px 20px;
-    margin-bottom: 24px;
-    font-size: 14px;
-    line-height: 1.7;
-  }
-  #setup-banner strong { display: block; margin-bottom: 6px; font-size: 15px; }
-  #setup-banner ol { padding-left: 18px; }
-  #setup-banner code { background: #f0f0ec; border-radius: 4px; padding: 1px 5px; font-size: 12px; }
-
   @media (max-width: 560px) {
     .summary { grid-template-columns: 1fr; }
     .row { grid-template-columns: 1fr; }
@@ -281,17 +268,6 @@
     </div>
     <button class="btn-clear-all" onclick="borrarTodo()">Borrar todo</button>
   </header>
-
-  <div id="setup-banner" style="display:none">
-    <strong>⚙️ Activa el guardado compartido con Firebase (gratis, 3 min)</strong>
-    <ol>
-      <li>Ve a <a href="https://console.firebase.google.com" target="_blank">console.firebase.google.com</a> e inicia sesión.</li>
-      <li>Crea un proyecto → <strong>Realtime Database</strong> → Crear base de datos → <em>Modo de prueba</em>.</li>
-      <li>Ve a ⚙️ Configuración del proyecto → Tu app → copia <code>apiKey</code>, <code>databaseURL</code> y <code>projectId</code>.</li>
-      <li>Pégalos en las 3 líneas marcadas con <code>← CAMBIAR</code> en el código de este archivo.</li>
-    </ol>
-    Hasta entonces los datos se guardan solo en este navegador.
-  </div>
 
   <div class="summary">
     <div class="card entradas">
@@ -364,9 +340,7 @@
   let movimientos = [];
   let tipo = 'in';
   let filtro = 'all';
-  let dbRef = null;
 
-  const configured = !FIREBASE_CONFIG.apiKey.includes('AQUI');
   const fmt = n => '$' + Number(n).toLocaleString('es-CO', { maximumFractionDigits: 0 });
 
   document.getElementById('fecha').valueAsDate = new Date();
@@ -380,22 +354,15 @@
     toastTimer = setTimeout(() => el.classList.remove('show'), dur);
   }
 
-  // ── Inicialización ────────────────────────────────────────────────────────
-  if (configured) {
-    firebase.initializeApp(FIREBASE_CONFIG);
-    dbRef = firebase.database().ref('movimientos');
+  // ── Inicialización ─────────────────────────────────────────────────────────
+  firebase.initializeApp(FIREBASE_CONFIG);
+  const dbRef = firebase.database().ref('movimientos');
 
-    // Escucha en tiempo real — actualiza para TODOS los usuarios conectados
-    dbRef.on('value', snap => {
-      const data = snap.val() || {};
-      movimientos = Object.values(data).sort((a, b) => b.id - a.id);
-      render();
-    });
-  } else {
-    document.getElementById('setup-banner').style.display = 'block';
-    try { movimientos = JSON.parse(localStorage.getItem('movimientos') || '[]'); } catch(e) { movimientos = []; }
+  dbRef.on('value', snap => {
+    const data = snap.val() || {};
+    movimientos = Object.values(data).sort((a, b) => b.id - a.id);
     render();
-  }
+  });
 
   // ── UI ────────────────────────────────────────────────────────────────────
   function setTipo(t) {
@@ -428,44 +395,21 @@
     document.getElementById('monto').value = '';
     document.getElementById('desc').value  = '';
 
-    if (configured) {
-      await dbRef.child(String(mov.id)).set(mov);
-      toast('Guardado ✓');
-    } else {
-      movimientos.unshift(mov);
-      localSave();
-      render();
-      toast('Guardado (solo este dispositivo)');
-    }
+    await dbRef.child(String(mov.id)).set(mov);
+    toast('Guardado ✓');
   }
 
   async function eliminar(id) {
     if (!confirm('¿Eliminar este movimiento?')) return;
-    if (configured) {
-      await dbRef.child(String(id)).remove();
-    } else {
-      movimientos = movimientos.filter(m => m.id !== id);
-      localSave();
-      render();
-    }
+    await dbRef.child(String(id)).remove();
     toast('Eliminado');
   }
 
   async function borrarTodo() {
     if (!movimientos.length) return;
     if (!confirm('¿Borrar TODOS los movimientos? Esta acción no se puede deshacer.')) return;
-    if (configured) {
-      await dbRef.remove();
-    } else {
-      movimientos = [];
-      localSave();
-      render();
-    }
+    await dbRef.remove();
     toast('Todo borrado');
-  }
-
-  function localSave() {
-    localStorage.setItem('movimientos', JSON.stringify(movimientos));
   }
 
   // ── Render ────────────────────────────────────────────────────────────────
