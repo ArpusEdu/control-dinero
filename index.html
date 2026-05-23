@@ -251,6 +251,53 @@
     font-size: 14px;
   }
 
+  /* Préstamos */
+  .section-divider {
+    border: none; border-top: 1px solid var(--line);
+    margin: 36px 0 28px;
+  }
+  .loan {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 14px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    box-shadow: var(--shadow);
+    animation: pop .25s ease;
+    transition: opacity .2s;
+  }
+  .loan.paid { opacity: .45; }
+  .loan-dot {
+    width: 38px; height: 38px;
+    border-radius: 11px;
+    flex-shrink: 0;
+    display: grid; place-items: center;
+    font-size: 16px;
+    background: #ede9fe; color: #6d28d9;
+  }
+  .loan.paid .loan-dot { background: var(--in-soft); color: var(--in); }
+  .loan-info { flex: 1; min-width: 0; }
+  .loan-info .persona { font-size: 15px; font-weight: 600; }
+  .loan-info .meta { font-size: 12.5px; color: var(--muted); margin-top: 2px; }
+  .loan-amount { font-size: 16px; font-weight: 650; white-space: nowrap; color: #6d28d9; }
+  .loan.paid .loan-amount { color: var(--in); text-decoration: line-through; }
+  .badge-paid {
+    font-size: 11px; font-weight: 700;
+    background: var(--in-soft); color: var(--in);
+    border-radius: 99px; padding: 2px 8px;
+    white-space: nowrap;
+  }
+  .btn-cobrado {
+    border: 1px solid #ede9fe; background: #faf8ff;
+    color: #6d28d9; padding: 5px 10px;
+    border-radius: 8px; font-size: 12px; font-weight: 600;
+    cursor: pointer; font-family: inherit; white-space: nowrap;
+    transition: background .15s;
+  }
+  .btn-cobrado:hover { background: #ede9fe; }
+
   .toast {
     position: fixed;
     bottom: 20px;
@@ -367,6 +414,40 @@
 
   <div class="movs" id="movs"></div>
 
+  <!-- Préstamos -->
+  <hr class="section-divider">
+
+  <div class="list-head">
+    <h2>Préstamos por cobrar</h2>
+    <span class="count" id="loans-count"></span>
+  </div>
+
+  <div class="form-card" style="margin-bottom:20px">
+    <div class="row">
+      <div class="field">
+        <label for="p-persona">¿A quién le presté?</label>
+        <input type="text" id="p-persona" placeholder="Nombre de la persona">
+      </div>
+      <div class="field">
+        <label for="p-monto">Monto prestado</label>
+        <input type="number" id="p-monto" inputmode="decimal" placeholder="0" min="0" step="any">
+      </div>
+    </div>
+    <div class="row">
+      <div class="field">
+        <label for="p-fecha">Fecha del préstamo</label>
+        <input type="date" id="p-fecha">
+      </div>
+      <div class="field">
+        <label for="p-nota">Nota (opcional)</label>
+        <input type="text" id="p-nota" placeholder="Ej: para el arriendo">
+      </div>
+    </div>
+    <button class="submit" onclick="agregarPrestamo()">Registrar préstamo</button>
+  </div>
+
+  <div class="movs" id="loans-list"></div>
+
   <!-- Solo visible al imprimir -->
   <div class="print-report" id="print-report"></div>
 </div>
@@ -389,12 +470,14 @@
   // ─────────────────────────────────────────────────────────────────────────
 
   let movimientos = [];
+  let prestamos = [];
   let tipo = 'in';
   let filtro = 'all';
 
   const fmt = n => '$' + Number(n).toLocaleString('es-CO', { maximumFractionDigits: 0 });
 
   document.getElementById('fecha').valueAsDate = new Date();
+  document.getElementById('p-fecha').valueAsDate = new Date();
 
   let toastTimer;
   function toast(msg, dur = 2000) {
@@ -408,11 +491,19 @@
   // ── Inicialización ─────────────────────────────────────────────────────────
   firebase.initializeApp(FIREBASE_CONFIG);
   const dbRef = firebase.database().ref('movimientos');
+  const loansRef = firebase.database().ref('prestamos');
 
   dbRef.on('value', snap => {
     const data = snap.val() || {};
     movimientos = Object.values(data).sort((a, b) => b.id - a.id);
     render();
+  });
+
+  loansRef.on('value', snap => {
+    const data = snap.val() || {};
+    prestamos = Object.values(data).sort((a, b) => b.id - a.id);
+    renderPrestamos();
+    render(); // actualiza también el print report con los préstamos
   });
 
   // ── UI ────────────────────────────────────────────────────────────────────
@@ -510,6 +601,21 @@
       </tr>
     `).join('');
 
+    buildPrintReport(totalIn, totalOut, filas);
+  }
+
+  function buildPrintReport(totalIn, totalOut, filasMovs) {
+    const pendientes = prestamos.filter(p => !p.pagado);
+    const totalPrestado = pendientes.reduce((s, p) => s + p.monto, 0);
+    const filasLoans = prestamos.map(p => `
+      <tr>
+        <td class="date">${fechaTexto(p.fecha)}</td>
+        <td>${escapar(p.persona)}${p.nota ? ' <span style="color:#888">· ' + escapar(p.nota) + '</span>' : ''}</td>
+        <td style="color:#6d28d9;font-weight:600;text-align:right${p.pagado ? ';text-decoration:line-through;color:#2e7d4f' : ''}">${fmt(p.monto)}</td>
+        <td style="text-align:center;font-size:11px">${p.pagado ? 'Cobrado' : 'Pendiente'}</td>
+      </tr>
+    `).join('');
+
     document.getElementById('print-report').innerHTML = `
       <div class="pr-header">
         <div><h1>Control de Dinero</h1></div>
@@ -519,13 +625,88 @@
         <div class="pr-total in"><div class="lbl">Entradas</div><div class="val">${fmt(totalIn)}</div></div>
         <div class="pr-total out"><div class="lbl">Salidas</div><div class="val">${fmt(totalOut)}</div></div>
         <div class="pr-total bal"><div class="lbl">Saldo</div><div class="val">${fmt(totalIn - totalOut)}</div></div>
+        ${totalPrestado > 0 ? `<div class="pr-total" style="color:#6d28d9"><div class="lbl">Por cobrar</div><div class="val" style="color:#6d28d9">${fmt(totalPrestado)}</div></div>` : ''}
       </div>
       <table class="pr-table">
         <thead><tr><th>Fecha</th><th>Descripción</th><th style="text-align:right">Monto</th></tr></thead>
-        <tbody>${filas}</tbody>
+        <tbody>${filasMovs}</tbody>
         <tfoot><tr><td colspan="2">Total</td><td class="${(totalIn-totalOut)>=0?'amt-in':'amt-out'}" style="text-align:right">${fmt(totalIn-totalOut)}</td></tr></tfoot>
       </table>
+      ${prestamos.length ? `
+      <div style="margin-top:24px">
+        <div style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;color:#6d28d9">Préstamos</div>
+        <table class="pr-table">
+          <thead><tr><th>Fecha</th><th>Persona · Nota</th><th style="text-align:right">Monto</th><th style="text-align:center">Estado</th></tr></thead>
+          <tbody>${filasLoans}</tbody>
+          <tfoot><tr><td colspan="2">Por cobrar</td><td style="text-align:right;color:#6d28d9;font-weight:700">${fmt(totalPrestado)}</td><td></td></tr></tfoot>
+        </table>
+      </div>` : ''}
     `;
+  }
+
+  // ── Préstamos ─────────────────────────────────────────────────────────────
+  async function agregarPrestamo() {
+    const persona = document.getElementById('p-persona').value.trim();
+    const monto   = parseFloat(document.getElementById('p-monto').value);
+    const fecha   = document.getElementById('p-fecha').value;
+    const nota    = document.getElementById('p-nota').value.trim();
+
+    if (!persona) { alert('Escribe el nombre de la persona.'); return; }
+    if (!monto || monto <= 0) { alert('Pon un monto válido.'); return; }
+
+    const p = {
+      id: Date.now(), persona, monto, nota,
+      fecha: fecha || new Date().toISOString().slice(0, 10),
+      pagado: false
+    };
+
+    document.getElementById('p-persona').value = '';
+    document.getElementById('p-monto').value   = '';
+    document.getElementById('p-nota').value    = '';
+
+    await loansRef.child(String(p.id)).set(p);
+    toast('Préstamo registrado ✓');
+  }
+
+  async function marcarPagado(id) {
+    const p = prestamos.find(x => x.id === id);
+    if (!p) return;
+    await loansRef.child(String(id)).update({ pagado: !p.pagado });
+    toast(p.pagado ? 'Marcado como pendiente' : 'Marcado como cobrado ✓');
+  }
+
+  async function eliminarPrestamo(id) {
+    if (!confirm('¿Eliminar este préstamo?')) return;
+    await loansRef.child(String(id)).remove();
+    toast('Eliminado');
+  }
+
+  function renderPrestamos() {
+    const pendientes = prestamos.filter(p => !p.pagado);
+    const total = pendientes.reduce((s, p) => s + p.monto, 0);
+    document.getElementById('loans-count').textContent =
+      prestamos.length ? `${pendientes.length} pendiente${pendientes.length !== 1 ? 's' : ''} · ${fmt(total)}` : '';
+
+    const cont = document.getElementById('loans-list');
+    if (!prestamos.length) {
+      cont.innerHTML = '<div class="empty">Sin préstamos registrados.</div>';
+      return;
+    }
+
+    cont.innerHTML = prestamos.map(p => `
+      <div class="loan${p.pagado ? ' paid' : ''}">
+        <div class="loan-dot">${p.pagado ? '✓' : '🤝'}</div>
+        <div class="loan-info">
+          <div class="persona">${escapar(p.persona)}${p.nota ? ' <span style="font-weight:400;color:var(--muted)">· ' + escapar(p.nota) + '</span>' : ''}</div>
+          <div class="meta">${fechaTexto(p.fecha)}</div>
+        </div>
+        <div class="loan-amount">${fmt(p.monto)}</div>
+        ${p.pagado
+          ? '<span class="badge-paid">Cobrado</span>'
+          : `<button class="btn-cobrado" onclick="marcarPagado(${p.id})">Cobrado</button>`}
+        <button class="del" onclick="eliminarPrestamo(${p.id})" title="Eliminar">×</button>
+      </div>
+    `).join('');
   }
 </script>
 </body>
